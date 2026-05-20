@@ -1,0 +1,86 @@
+// TOKYO LAND - Backend schema
+// Development DB: SQLite. Production target: PostgreSQL.
+// To switch, change provider to "postgresql" and update DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+  code            String   @unique // 顧客コード (例: C-1042)
+  name            String
+  nameKana        String
+  phone           String?
+  email           String?
+  assignedTo      String   // 担当者名
+  status          String   // 商談中 / 内見予定 / 契約準備 / 成約 / 保留
+  // 検索条件
+  desiredArea     String?  // 希望エリア
+  desiredRooms    String?  // 希望間取り
+  budgetMin       Int?     // 予算下限 (円)
+  budgetMax       Int?     // 予算上限 (円)
+  notes           String?
+  lastContactedAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  proposals       Proposal[]
+}
+
+model Property {
+  id          String   @id @default(cuid())
+  code        String   @unique // 物件コード (例: P-2301)
+  name        String
+  area        String   // エリア (世田谷区など)
+  address     String
+  type        String   // 新築マンション / 中古マンション / 一戸建て / 土地 / 投資用
+  rooms       String   // 間取り (3LDK など)
+  sizeSqm     Float    // 専有面積 (㎡)
+  rent        Int?     // 賃料 (円/月) — 賃貸用
+  price       Int?     // 販売価格 (円) — 売買用
+  builtYear   Int?
+  vacancy     String   // 空室状況: 空室 / 申込中 / 入居中 / 準備中
+  status      String   // 公開中 / 商談中 / 成約済 / 非公開 / 準備中
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  proposalItems ProposalItem[]
+}
+
+// お客様向けの提案。1顧客に対して複数物件を束ねて公開できる。
+// 公開には slug（短いランダム識別子）と pin（4桁）の両方が必要。
+model Proposal {
+  id         String   @id @default(cuid())
+  slug       String   @unique   // 公開URLの識別子
+  pin        String              // 4桁の数字 (MVPでは平文保存、将来ハッシュ化)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  title      String?
+  message    String?             // 担当者からの一言メッセージ
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  items      ProposalItem[]
+}
+
+model ProposalItem {
+  id               String   @id @default(cuid())
+  proposalId       String
+  proposal         Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  propertyId       String
+  property         Property @relation(fields: [propertyId], references: [id])
+  propertyImageUrl String?            // アップロード済み画像のURL
+  floorPlanUrl     String?            // アップロード済み間取り図のURL
+  comment          String?            // 物件ごとのコメント
+  order            Int      @default(0)
+
+  @@index([proposalId])
+}
