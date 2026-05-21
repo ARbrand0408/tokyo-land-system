@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createProperty,
+  extractPropertyFromPdf,
   getProperty,
   updateProperty,
 } from '../api/properties';
@@ -77,6 +78,9 @@ export function PropertyEditor({ propertyId, onBack }: Props) {
   const [loading, setLoading] = useState(!!propertyId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractNotice, setExtractNotice] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -131,6 +135,50 @@ export function PropertyEditor({ propertyId, onBack }: Props) {
     update('floorPlanUrl', res.data.url);
   };
 
+  const handlePdfExtract = async (file: File) => {
+    setError(null);
+    setExtractNotice(null);
+    setExtracting(true);
+    try {
+      const res = await extractPropertyFromPdf(file);
+      const extracted = res.data.extracted as Partial<Property>;
+      // 空欄のみ上書き（ユーザーが既に入力した値は保護）
+      setForm((prev) => {
+        const next: Partial<Property> = { ...prev };
+        const applied: string[] = [];
+        for (const [key, value] of Object.entries(extracted)) {
+          const k = key as keyof Property;
+          if (value == null) continue;
+          if (Array.isArray(value) && value.length === 0) continue;
+          const current = prev[k];
+          const isEmpty =
+            current == null ||
+            current === '' ||
+            (Array.isArray(current) && current.length === 0);
+          if (!isEmpty) continue;
+          (next as Record<string, unknown>)[k] = value;
+          applied.push(k);
+        }
+        if (applied.length === 0) {
+          setExtractNotice(
+            res.data.matchedFields.length > 0
+              ? `PDFから${res.data.matchedFields.length}項目を検出しましたが、いずれもフォーム入力済みのため上書きしませんでした。`
+              : 'PDFから抽出できる項目が見つかりませんでした。',
+          );
+        } else {
+          setExtractNotice(`PDFから${applied.length}項目を自動入力しました: ${applied.join('、')}`);
+        }
+        return next;
+      });
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? `PDF抽出に失敗: ${err.message}` : 'PDF抽出に失敗しました';
+      setError(message);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   if (loading) {
     return <div className="text-sm text-ink-muted">読み込み中…</div>;
   }
@@ -150,13 +198,24 @@ export function PropertyEditor({ propertyId, onBack }: Props) {
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              alert('PDFから物件データを抽出する機能は今後実装予定です。');
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              await handlePdfExtract(file);
+              e.target.value = '';
             }}
-            className="px-3 py-2 text-xs rounded-md border border-accent-pine/40 text-accent-pine hover:bg-accent-pine/10"
+          />
+          <button
+            onClick={() => pdfInputRef.current?.click()}
+            disabled={extracting}
+            className="px-3 py-2 text-xs rounded-md border border-accent-pine/40 text-accent-pine hover:bg-accent-pine/10 disabled:opacity-40"
           >
-            ✨ PDFから抽出
+            {extracting ? '解析中…' : '✨ PDFから抽出'}
           </button>
         </div>
       </header>
@@ -164,6 +223,18 @@ export function PropertyEditor({ propertyId, onBack }: Props) {
       {error && (
         <div className="rounded-md border border-accent-terracotta/40 bg-accent-terracotta/10 px-4 py-3 text-sm text-accent-terracotta">
           {error}
+        </div>
+      )}
+
+      {extractNotice && (
+        <div className="rounded-md border border-accent-pine/40 bg-accent-pine/10 px-4 py-3 text-sm text-accent-pine flex items-start justify-between gap-3">
+          <span>{extractNotice}</span>
+          <button
+            onClick={() => setExtractNotice(null)}
+            className="text-accent-pine/70 hover:text-accent-pine text-xs"
+          >
+            ×
+          </button>
         </div>
       )}
 

@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import { prisma } from '../db.js';
+import { extractTextFromPdf, parseExtractedText } from '../lib/pdfExtract.js';
 
 export const propertiesRoute = new Hono();
+
+const PDF_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // 物件保存に共通するフィールド整形
 type JsonInput = Parameters<typeof prisma.property.create>[0]['data']['stations'];
@@ -57,6 +60,51 @@ function buildData(body: Record<string, unknown>) {
     status: (body.status as string) ?? '下書き',
   };
 }
+
+propertiesRoute.post('/extract-from-pdf', async (c) => {
+  const contentType = c.req.header('content-type') ?? '';
+  if (!contentType.startsWith('multipart/form-data')) {
+    return c.json({ error: 'Content-Type must be multipart/form-data' }, 400);
+  }
+
+  const form = await c.req.formData();
+  const file = form.get('file');
+  if (!(file instanceof File)) {
+    return c.json({ error: 'file field is required' }, 400);
+  }
+  if (file.size > PDF_MAX_BYTES) {
+    return c.json({ error: `File too large (max ${PDF_MAX_BYTES / 1024 / 1024}MB)` }, 413);
+  }
+  const isPdf =
+    file.type === 'application/pdf' ||
+    file.type === 'application/x-pdf' ||
+    file.name.toLowerCase().endsWith('.pdf');
+  if (!isPdf) {
+    return c.json({ error: 'Only PDF uploads are supported' }, 415);
+  }
+
+  try {
+    const buffer = new Uint8Array(await file.arrayBuffer());
+    const rawText = await extractTextFromPdf(buffer);
+    if (!rawText.trim()) {
+      return c.json(
+        { error: 'PDFからテキストを抽出できませんでした（スキャン画像PDFの可能性があります）' },
+        422,
+      );
+    }
+    const result = parseExtractedText(rawText);
+    return c.json({
+      data: {
+        extracted: result.extracted,
+        matchedFields: result.matchedFields,
+        rawText: result.rawText.slice(0, 1000),
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: `PDF解析に失敗: ${message}` }, 500);
+  }
+});
 
 propertiesRoute.get('/', async (c) => {
   const properties = await prisma.property.findMany({ orderBy: { updatedAt: 'desc' } });

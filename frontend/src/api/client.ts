@@ -48,7 +48,17 @@ export const api = {
       body: formData,
     });
     if (!res.ok) {
-      throw new ApiError(`${res.status} ${res.statusText}`, res.status);
+      let detail = '';
+      try {
+        const body = await res.json();
+        detail = body?.error ?? body?.message ?? '';
+      } catch {
+        // ignore
+      }
+      throw new ApiError(
+        `${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}`,
+        res.status,
+      );
     }
     return res.json() as Promise<T>;
   },

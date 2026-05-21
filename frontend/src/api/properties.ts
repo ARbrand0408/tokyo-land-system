@@ -28,3 +28,17 @@ export function deleteProperty(id: string) {
 export function setPropertyStatus(id: string, status: PropertyStatus) {
   return api.patch<ItemResponse<Property>>(`/api/properties/${id}/status`, { status });
 }
+
+export type PdfExtractionResponse = {
+  data: {
+    extracted: PropertyInput;
+    matchedFields: string[];
+    rawText: string;
+  };
+};
+
+export function extractPropertyFromPdf(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.upload<PdfExtractionResponse>('/api/properties/extract-from-pdf', formData);
+}
