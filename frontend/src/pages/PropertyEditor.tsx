@@ -142,7 +142,9 @@ export function PropertyEditor({ propertyId, onBack }: Props) {
     try {
       const res = await extractPropertyFromPdf(file);
       const extracted = res.data.extracted as Partial<Property>;
-      // 空欄のみ上書き（ユーザーが既に入力した値は保護）
+      // 値の保護方針:
+      //   - スカラー値: 空欄のみ上書き
+      //   - 配列値 (stations / highlights): 既存値に追加（重複は除外）
       setForm((prev) => {
         const next: Partial<Property> = { ...prev };
         const applied: string[] = [];
@@ -150,11 +152,17 @@ export function PropertyEditor({ propertyId, onBack }: Props) {
           const k = key as keyof Property;
           if (value == null) continue;
           if (Array.isArray(value) && value.length === 0) continue;
+          if (Array.isArray(value)) {
+            const current = (prev[k] as unknown[]) ?? [];
+            const seen = new Set(current.map((it) => JSON.stringify(it)));
+            const additions = value.filter((it) => !seen.has(JSON.stringify(it)));
+            if (additions.length === 0) continue;
+            (next as Record<string, unknown>)[k] = [...current, ...additions];
+            applied.push(k);
+            continue;
+          }
           const current = prev[k];
-          const isEmpty =
-            current == null ||
-            current === '' ||
-            (Array.isArray(current) && current.length === 0);
+          const isEmpty = current == null || current === '';
           if (!isEmpty) continue;
           (next as Record<string, unknown>)[k] = value;
           applied.push(k);

@@ -86,6 +86,16 @@ propertiesRoute.post('/extract-from-pdf', async (c) => {
   try {
     const buffer = new Uint8Array(await file.arrayBuffer());
     const rawText = await extractTextFromPdf(buffer);
+
+    // --- DEBUG: 生テキストをコンソールに出力 -------------------------------
+    const lineCount = rawText.split('\n').length;
+    console.log(`[PDF Extract] file="${file.name}" size=${file.size}B`);
+    console.log(`[PDF Extract] rawText length=${rawText.length}, lines=${lineCount}`);
+    console.log('[PDF Extract] --- BEGIN rawText ---');
+    console.log(rawText.length > 2000 ? `${rawText.slice(0, 2000)}\n...(truncated)` : rawText);
+    console.log('[PDF Extract] --- END rawText ---');
+    // ---------------------------------------------------------------------
+
     if (!rawText.trim()) {
       return c.json(
         { error: 'PDFからテキストを抽出できませんでした（スキャン画像PDFの可能性があります）' },
@@ -93,6 +103,7 @@ propertiesRoute.post('/extract-from-pdf', async (c) => {
       );
     }
     const result = parseExtractedText(rawText);
+    console.log(`[PDF Extract] matched fields: ${result.matchedFields.join(', ') || '(none)'}`);
     return c.json({
       data: {
         extracted: result.extracted,
@@ -102,6 +113,7 @@ propertiesRoute.post('/extract-from-pdf', async (c) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[PDF Extract] failed:', err);
     return c.json({ error: `PDF解析に失敗: ${message}` }, 500);
   }
 });
