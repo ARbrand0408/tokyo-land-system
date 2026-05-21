@@ -1,5 +1,3 @@
-// Format a yen amount as a Japanese-style abbreviated string.
-// 100,000,000 -> "¥1.0億"  /  85,000,000 -> "¥8,500万"  /  null -> "—"
 export function formatYen(value: number | null | undefined): string {
   if (value == null) return '—';
   if (value >= 100_000_000) {
@@ -13,11 +11,9 @@ export function formatYen(value: number | null | undefined): string {
   return `¥${value.toLocaleString('ja-JP')}`;
 }
 
-export function formatBudgetRange(min: number | null, max: number | null): string {
-  if (min == null && max == null) return '—';
-  if (min != null && max != null) return `${formatYen(min)} 〜 ${formatYen(max)}`;
-  if (max != null) return `〜 ${formatYen(max)}`;
-  return `${formatYen(min)} 〜`;
+export function formatRent(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return `¥${value.toLocaleString('ja-JP')}`;
 }
 
 export function formatDate(iso: string | null | undefined): string {
@@ -25,4 +21,20 @@ export function formatDate(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
   return d.toISOString().slice(0, 10);
+}
+
+export function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return 'たった今';
+  if (diff < 60 * 60) return `${Math.floor(diff / 60)}分前`;
+  if (diff < 60 * 60 * 24) return `${Math.floor(diff / 3600)}時間前`;
+  if (diff < 60 * 60 * 24 * 7) return `${Math.floor(diff / (3600 * 24))}日前`;
+  return formatDate(iso);
+}
+
+export function pad2(n: number): string {
+  return String(n).padStart(2, '0');
 }

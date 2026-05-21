@@ -1,86 +1,126 @@
-// TOKYO LAND - Backend schema
-// Development DB: SQLite. Production target: PostgreSQL.
-// To switch, change provider to "postgresql" and update DATABASE_URL.
+// TOKYO LAND - Backend schema (v2)
+// PostgreSQL (Neon)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+// 顧客 - お客様情報。1顧客に対し複数の提案が紐付く。
 model Customer {
-  id              String   @id @default(cuid())
-  code            String   @unique // 顧客コード (例: C-1042)
-  name            String
-  nameKana        String
-  phone           String?
-  email           String?
-  assignedTo      String   // 担当者名
-  status          String   // 商談中 / 内見予定 / 契約準備 / 成約 / 保留
-  // 検索条件
-  desiredArea     String?  // 希望エリア
-  desiredRooms    String?  // 希望間取り
-  budgetMin       Int?     // 予算下限 (円)
-  budgetMax       Int?     // 予算上限 (円)
-  notes           String?
-  lastContactedAt DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String                     // 顧客名（必須）
+  companyName  String?                    // 会社名
+  accessCode   String   @unique           // アクセスコード(4桁数字, 自動生成)
+  email        String?
+  phone        String?
+  moveInDate   String?                    // 入居時期 (yyyy-MM)
+  birthDate    String?                    // 生年月日 (yyyy-MM-dd)
+  preferences  String?                    // ご希望条件
+  notes        String?                    // メモ
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  proposals       Proposal[]
+  proposals    Proposal[]
 }
 
+// 物件 - 物件マスター
 model Property {
-  id          String   @id @default(cuid())
-  code        String   @unique // 物件コード (例: P-2301)
-  name        String
-  area        String   // エリア (世田谷区など)
-  address     String
-  type        String   // 新築マンション / 中古マンション / 一戸建て / 土地 / 投資用
-  rooms       String   // 間取り (3LDK など)
-  sizeSqm     Float    // 専有面積 (㎡)
-  rent        Int?     // 賃料 (円/月) — 賃貸用
-  price       Int?     // 販売価格 (円) — 売買用
-  builtYear   Int?
-  vacancy     String   // 空室状況: 空室 / 申込中 / 入居中 / 準備中
-  status      String   // 公開中 / 商談中 / 成約済 / 非公開 / 準備中
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
 
-  proposalItems ProposalItem[]
+  // 基本情報
+  name           String                     // 物件名（必須）
+  propertyType   String                     // 種別: 賃貸マンション/賃貸戸建て/売買マンション/売買戸建て
+  area           String                     // エリア (23区)
+  address        String?                    // 所在地
+
+  // 交通: [{ line, station, walkMin }]
+  stations       Json     @default("[]")
+
+  // 物件のポイント: string[]
+  highlights     Json     @default("[]")
+
+  // 建物概要
+  rooms          String?                    // 間取り（例: 3LDK）
+  sizeSqm        Float?                     // 専有面積
+  terraceSqm     Float?                     // 専用テラス面積
+  floor          Int?                       // 所在階
+  totalFloors    Int?                       // 地上階数
+  basementFloors Int?                       // 地下階数
+  builtYearMonth String?                    // 築年月 (yyyy-MM)
+  structure      String?                    // 構造
+  totalUnits     Int?                       // 総戸数
+  mainLight      String?                    // 主要採光面
+  availableFrom  String?                    // 入居可能時期
+
+  // 金額・契約条件
+  rent           Int?                       // 月額賃料
+  maintenanceFee Int?                       // 管理費
+  deposit        String?                    // 敷金
+  keyMoney       String?                    // 礼金
+  brokerFee      String?                    // 仲介手数料
+  renewalFee     String?                    // 更新料
+  contractTerm   String?                    // 契約期間
+  cancelNotice   String?                    // 解約予告
+  insurance      String?                    // 保険
+  guarantor      String?                    // 保証会社
+
+  // ご利用条件
+  officeUse      String?                    // 事務所使用
+  sohoUse        String?                    // SOHO使用
+  pets           String?                    // ペット
+  instruments    String?                    // 楽器
+  smoking        String?                    // 喫煙
+  currentStatus  String?                    // 現況
+
+  // 駐車場
+  parking        String?                    // 駐車場情報
+  parkingFee     String?                    // 月額料金
+
+  // 説明・設備
+  description    String?                    // 物件説明
+  facilities     Json     @default("[]")    // 設備配列 (string[])
+
+  // 写真・図面
+  images         Json     @default("[]")    // 物件画像URL配列 (string[])
+  floorPlanUrl   String?                    // 間取り画像URL
+
+  // ステータス: 公開 / 下書き
+  status         String   @default("下書き")
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  proposalItems  ProposalItem[]
 }
 
-// お客様向けの提案。1顧客に対して複数物件を束ねて公開できる。
-// 公開には slug（短いランダム識別子）と pin（4桁）の両方が必要。
+// 提案 - 顧客に対して複数の物件をまとめて公開する
 model Proposal {
   id         String   @id @default(cuid())
-  slug       String   @unique   // 公開URLの識別子
-  pin        String              // 4桁の数字 (MVPでは平文保存、将来ハッシュ化)
+  slug       String   @unique
   customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   title      String?
-  message    String?             // 担当者からの一言メッセージ
-  expiresAt  DateTime?
+  message    String?
+  status     String   @default("下書き")    // 下書き / 送信済み
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   items      ProposalItem[]
 }
 
+// 提案に含まれる物件 (順序付き)
 model ProposalItem {
-  id               String   @id @default(cuid())
-  proposalId       String
-  proposal         Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  propertyId       String
-  property         Property @relation(fields: [propertyId], references: [id])
-  propertyImageUrl String?            // アップロード済み画像のURL
-  floorPlanUrl     String?            // アップロード済み間取り図のURL
-  comment          String?            // 物件ごとのコメント
-  order            Int      @default(0)
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
+  order      Int      @default(0)
 
   @@index([proposalId])
 }

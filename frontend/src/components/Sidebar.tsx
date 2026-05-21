@@ -1,4 +1,4 @@
-type ViewKey = 'dashboard' | 'properties' | 'proposal';
+type ViewKey = 'dashboard' | 'properties' | 'customers';
 
 type NavItem = {
   key: ViewKey;
@@ -8,9 +8,9 @@ type NavItem = {
 };
 
 const items: NavItem[] = [
-  { key: 'dashboard', label: 'ダッシュボード', description: '担当顧客の状況', icon: '◐' },
-  { key: 'properties', label: '物件マスタ', description: '取扱物件一覧', icon: '◇' },
-  { key: 'proposal', label: '提案エディタ', description: '資料の作成', icon: '◈' },
+  { key: 'dashboard', label: 'ダッシュボード', description: 'KPI / 最近の提案', icon: '◐' },
+  { key: 'properties', label: '物件マスター', description: '物件登録・編集', icon: '◇' },
+  { key: 'customers', label: '顧客・提案管理', description: '顧客と提案物件', icon: '◈' },
 ];
 
 type Props = {
@@ -24,7 +24,7 @@ export function Sidebar({ active, onChange }: Props) {
       <div className="px-6 pt-8 pb-10 border-b border-ink-muted/15">
         <div className="font-serif text-2xl text-ink-primary tracking-wide">TOKYO LAND</div>
         <div className="font-mono text-[10px] text-ink-muted mt-1 tracking-widest">
-          CUSTOMER MGMT v0.1
+          CUSTOMER MGMT v0.2
         </div>
       </div>
 

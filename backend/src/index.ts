@@ -15,15 +15,15 @@ app.use('*', logger());
 app.use(
   '/api/*',
   cors({
-    origin: ['http://localhost:5173'],
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Proposal-Pin'],
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Access-Code'],
   }),
 );
 app.use(
   '/uploads/*',
   cors({
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     allowMethods: ['GET'],
   }),
 );
@@ -31,7 +31,7 @@ app.use(
 app.get('/', (c) =>
   c.json({
     name: 'TOKYO LAND API',
-    version: '0.1.0',
+    version: '0.2.0',
     endpoints: [
       '/api/customers',
       '/api/properties',
@@ -50,7 +50,6 @@ app.route('/api/upload', uploadRoute);
 app.route('/api/proposals', proposalsRoute);
 app.route('/api/p', publicProposalsRoute);
 
-// Serve uploaded files (mock S3 storage).
 app.use('/uploads/*', serveStatic({ root: './' }));
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));

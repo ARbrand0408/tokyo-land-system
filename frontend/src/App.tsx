@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sidebar, type ViewKey } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Properties } from './pages/Properties';
-import { ProposalEditor } from './pages/ProposalEditor';
+import { CustomersView } from './pages/customers/CustomersView';
 import { CustomerProposal } from './pages/customer/CustomerProposal';
 
 function App() {
@@ -14,13 +14,11 @@ function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // お客様専用ページ: /p/:slug
   const customerMatch = path.match(/^\/p\/([A-Za-z0-9_-]+)\/?$/);
   if (customerMatch && customerMatch[1]) {
     return <CustomerProposal slug={customerMatch[1]} />;
   }
 
-  // 担当者用 (デフォルト)
   return <AdminApp />;
 }
 
@@ -32,9 +30,11 @@ function AdminApp() {
       <Sidebar active={view} onChange={setView} />
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-[1400px] mx-auto px-10 py-10">
-          {view === 'dashboard' && <Dashboard />}
+          {view === 'dashboard' && (
+            <Dashboard onJumpToCustomers={() => setView('customers')} />
+          )}
           {view === 'properties' && <Properties />}
-          {view === 'proposal' && <ProposalEditor />}
+          {view === 'customers' && <CustomersView />}
         </div>
       </main>
     </div>

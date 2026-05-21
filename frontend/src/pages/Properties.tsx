@@ -1,37 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
-import { listProperties } from '../api/properties';
+import { listProperties, deleteProperty, duplicateProperty, setPropertyStatus } from '../api/properties';
 import { ApiError } from '../api/client';
 import type { Property, PropertyStatus } from '../api/types';
-import { StatusBadge, type Tone } from '../components/StatusBadge';
-import { formatDate, formatYen } from '../lib/format';
+import { StatusBadge } from '../components/StatusBadge';
+import { formatRent } from '../lib/format';
+import { PropertyEditor } from './PropertyEditor';
 
-const statusTone: Record<PropertyStatus, Tone> = {
-  公開中: 'emerald',
-  商談中: 'terracotta',
-  成約済: 'pine',
-  非公開: 'muted',
-  準備中: 'forest',
-};
-
-const statusOrder: PropertyStatus[] = ['公開中', '商談中', '準備中', '成約済', '非公開'];
+const TOKYO_23 = [
+  '千代田区', '中央区', '港区', '新宿区', '文京区', '台東区',
+  '墨田区', '江東区', '品川区', '目黒区', '大田区', '世田谷区',
+  '渋谷区', '中野区', '杉並区', '豊島区', '北区', '荒川区',
+  '板橋区', '練馬区', '足立区', '葛飾区', '江戸川区',
+];
 
 export function Properties() {
+  const [view, setView] = useState<{ mode: 'list' } | { mode: 'edit'; id: string | null }>({
+    mode: 'list',
+  });
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [areaFilter, setAreaFilter] = useState<string>('すべて');
   const [statusFilter, setStatusFilter] = useState<'すべて' | PropertyStatus>('すべて');
 
-  useEffect(() => {
-    let cancelled = false;
+  const refresh = () => {
     setLoading(true);
     setError(null);
-    listProperties()
-      .then((res) => {
-        if (!cancelled) setProperties(res.data);
-      })
+    return listProperties()
+      .then((res) => setProperties(res.data))
       .catch((err: unknown) => {
-        if (cancelled) return;
         const message =
           err instanceof ApiError
             ? `APIエラー: ${err.message}`
@@ -40,12 +38,11 @@ export function Properties() {
               : 'APIに接続できません';
         setError(message);
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    refresh();
   }, []);
 
   const filtered = useMemo(() => {
@@ -54,190 +51,191 @@ export function Properties() {
       const matchesQuery =
         !q ||
         p.name.toLowerCase().includes(q) ||
-        p.address.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q);
+        (p.address ?? '').toLowerCase().includes(q);
+      const matchesArea = areaFilter === 'すべて' || p.area === areaFilter;
       const matchesStatus = statusFilter === 'すべて' || p.status === statusFilter;
-      return matchesQuery && matchesStatus;
+      return matchesQuery && matchesArea && matchesStatus;
     });
-  }, [query, statusFilter, properties]);
+  }, [query, areaFilter, statusFilter, properties]);
 
-  const counts = useMemo(() => {
-    const map: Record<PropertyStatus, number> = {
-      公開中: 0,
-      商談中: 0,
-      成約済: 0,
-      非公開: 0,
-      準備中: 0,
-    };
-    properties.forEach((p) => {
-      map[p.status] += 1;
-    });
-    return map;
-  }, [properties]);
+  if (view.mode === 'edit') {
+    return (
+      <PropertyEditor
+        propertyId={view.id}
+        onBack={() => {
+          setView({ mode: 'list' });
+          refresh();
+        }}
+      />
+    );
+  }
+
+  const publishedCount = properties.filter((p) => p.status === '公開').length;
+
+  const handleDuplicate = async (id: string) => {
+    await duplicateProperty(id);
+    refresh();
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`「${name}」を削除しますか？`)) return;
+    await deleteProperty(id);
+    refresh();
+  };
+
+  const handleStatusToggle = async (p: Property) => {
+    const next: PropertyStatus = p.status === '公開' ? '下書き' : '公開';
+    await setPropertyStatus(p.id, next);
+    refresh();
+  };
 
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
-        <span className="font-mono text-[11px] tracking-widest text-ink-muted">
-          PROPERTY MASTER
-        </span>
+        <span className="font-mono text-[11px] tracking-widest text-ink-muted">PROPERTY MASTER</span>
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="font-serif text-3xl text-ink-primary">物件マスタ</h1>
+            <h1 className="font-serif text-3xl text-ink-primary">物件マスター</h1>
             <p className="text-sm text-ink-secondary mt-1">
-              取扱中の物件 {loading ? '—' : properties.length} 件を一元管理します。
+              登録総数 {properties.length} 件 / 公開中 {publishedCount} 件
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="px-4 py-2 rounded-md border border-ink-muted/30 text-ink-secondary text-xs hover:border-ink-primary hover:text-ink-primary transition-colors">
-              CSVエクスポート
-            </button>
-            <button className="px-4 py-2 rounded-md bg-accent-terracotta text-bg-white text-xs font-medium hover:bg-accent-terracotta/90 transition-colors">
-              + 物件を登録
-            </button>
-          </div>
+          <button
+            onClick={() => setView({ mode: 'edit', id: null })}
+            className="px-4 py-2 rounded-md bg-accent-pine text-bg-white text-xs font-medium hover:bg-accent-pine/90 transition-colors"
+          >
+            + 新規物件登録
+          </button>
         </div>
       </header>
 
       {error && (
         <div className="rounded-md border border-accent-terracotta/40 bg-accent-terracotta/10 px-4 py-3 text-sm text-accent-terracotta">
           {error}
-          <div className="text-[11px] text-ink-muted mt-1">
-            backend が起動しているか確認してください: cd backend && npm run dev
-          </div>
         </div>
       )}
 
-      <section className="grid grid-cols-5 gap-3">
-        {statusOrder.map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(statusFilter === s ? 'すべて' : s)}
-            className={[
-              'text-left bg-bg-card rounded-lg p-4 border transition-all',
-              statusFilter === s
-                ? 'border-accent-pine/50 ring-1 ring-accent-pine/30'
-                : 'border-ink-muted/10 hover:border-ink-muted/30',
-            ].join(' ')}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-ink-muted">{s}</span>
-              <StatusBadge label={`${counts[s]}件`} tone={statusTone[s]} />
-            </div>
-            <div className="font-serif text-2xl text-ink-primary mt-2">
-              {loading ? '—' : counts[s]}
-            </div>
-          </button>
-        ))}
-      </section>
-
       <section className="bg-bg-card rounded-lg border border-ink-muted/10 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-ink-muted/10 flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted text-sm">
-              ⌕
-            </span>
+        <div className="p-5 border-b border-ink-muted/10 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted text-sm">⌕</span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="物件名・住所・物件コードで検索"
-              className="w-full pl-9 pr-3 py-2.5 rounded-md bg-bg-white border border-ink-muted/20 text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-accent-pine/30 focus:border-accent-pine/40"
+              placeholder="物件名・住所で検索"
+              className="w-full pl-9 pr-3 py-2.5 rounded-md bg-bg-white border border-ink-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-accent-pine/30 focus:border-accent-pine/40"
             />
           </div>
-          <div className="flex items-center gap-2 text-xs text-ink-secondary">
-            <span>並び替え:</span>
-            <select className="bg-bg-white border border-ink-muted/20 rounded px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent-pine/30">
-              <option>更新日（新しい順）</option>
-              <option>価格（高い順）</option>
-              <option>価格（安い順）</option>
-              <option>物件コード</option>
-            </select>
+          <select
+            value={areaFilter}
+            onChange={(e) => setAreaFilter(e.target.value)}
+            className="bg-bg-white border border-ink-muted/20 rounded px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-accent-pine/30"
+          >
+            <option value="すべて">エリア(すべて)</option>
+            {TOKYO_23.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1 bg-bg-base/60 rounded-md p-1">
+            {(['すべて', '公開', '下書き'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={[
+                  'px-3 py-1.5 rounded text-xs transition-colors',
+                  statusFilter === s
+                    ? 'bg-bg-white text-ink-primary shadow-sm'
+                    : 'text-ink-secondary hover:text-ink-primary',
+                ].join(' ')}
+              >
+                {s}
+              </button>
+            ))}
           </div>
-          {statusFilter !== 'すべて' && (
-            <button
-              onClick={() => setStatusFilter('すべて')}
-              className="text-xs text-accent-terracotta hover:underline"
-            >
-              フィルタ解除 ({statusFilter})
-            </button>
+        </div>
+
+        <div>
+          {loading && (
+            <div className="px-5 py-12 text-center text-sm text-ink-muted">読み込み中…</div>
           )}
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-[11px] text-ink-muted uppercase tracking-wider bg-bg-base/30">
-                <th className="px-5 py-3 font-medium">物件コード</th>
-                <th className="px-5 py-3 font-medium">物件名 / 所在地</th>
-                <th className="px-5 py-3 font-medium">種別</th>
-                <th className="px-5 py-3 font-medium">価格</th>
-                <th className="px-5 py-3 font-medium">専有面積</th>
-                <th className="px-5 py-3 font-medium">間取り</th>
-                <th className="px-5 py-3 font-medium">築年</th>
-                <th className="px-5 py-3 font-medium">ステータス</th>
-                <th className="px-5 py-3 font-medium">更新日</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={9} className="px-5 py-12 text-center text-sm text-ink-muted">
-                    読み込み中…
-                  </td>
-                </tr>
-              )}
-              {!loading &&
-                filtered.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-t border-ink-muted/10 hover:bg-bg-base/30 transition-colors cursor-pointer"
-                  >
-                    <td className="px-5 py-4 font-mono text-xs text-ink-secondary">{p.code}</td>
-                    <td className="px-5 py-4">
-                      <div className="font-medium text-ink-primary">{p.name}</div>
-                      <div className="text-[11px] text-ink-muted">{p.address}</div>
-                    </td>
-                    <td className="px-5 py-4 text-ink-secondary text-xs">{p.type}</td>
-                    <td className="px-5 py-4 font-mono text-ink-primary font-medium">
-                      {formatYen(p.price)}
-                    </td>
-                    <td className="px-5 py-4 font-mono text-xs text-ink-secondary">
-                      {p.sizeSqm.toFixed(1)}㎡
-                    </td>
-                    <td className="px-5 py-4 text-ink-secondary">{p.rooms}</td>
-                    <td className="px-5 py-4 font-mono text-xs text-ink-secondary">
-                      {p.builtYear ?? '—'}
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge label={p.status} tone={statusTone[p.status]} />
-                    </td>
-                    <td className="px-5 py-4 font-mono text-xs text-ink-secondary">
-                      {formatDate(p.updatedAt)}
-                    </td>
-                  </tr>
-                ))}
-              {!loading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-5 py-12 text-center text-sm text-ink-muted">
-                    該当する物件がありません
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="px-5 py-3 border-t border-ink-muted/10 flex items-center justify-between text-xs text-ink-muted">
-          <span>
-            {filtered.length} / {properties.length} 件を表示
-          </span>
-          <div className="flex items-center gap-2">
-            <button className="px-2 py-1 hover:text-ink-primary">‹ 前へ</button>
-            <span className="font-mono">1 / 1</span>
-            <button className="px-2 py-1 hover:text-ink-primary">次へ ›</button>
-          </div>
+          {!loading && filtered.length === 0 && (
+            <div className="px-5 py-12 text-center text-sm text-ink-muted">
+              該当する物件がありません
+            </div>
+          )}
+          {!loading && filtered.map((p) => (
+            <div
+              key={p.id}
+              className="px-5 py-4 border-t border-ink-muted/10 first:border-t-0 flex items-center gap-4 hover:bg-bg-base/30 transition-colors"
+            >
+              <div className="w-20 h-16 rounded bg-bg-base/60 flex items-center justify-center overflow-hidden shrink-0">
+                {p.images[0] ? (
+                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-ink-muted text-[10px]">no image</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div
+                  onClick={() => setView({ mode: 'edit', id: p.id })}
+                  className="font-medium text-ink-primary truncate cursor-pointer hover:text-accent-pine"
+                >
+                  {p.name}
+                </div>
+                <div className="text-[11px] text-ink-muted mt-0.5 truncate">
+                  {p.area} / {p.rooms ?? '間取り未設定'} / {p.sizeSqm ? `${p.sizeSqm.toFixed(1)}㎡` : '—'} /{' '}
+                  {p.propertyType.startsWith('賃貸') ? formatRent(p.rent) : formatRent(p.rent)}
+                </div>
+              </div>
+              <button
+                onClick={() => handleStatusToggle(p)}
+                title="クリックでステータス切替"
+              >
+                <StatusBadge
+                  label={p.status}
+                  tone={p.status === '公開' ? 'emerald' : 'muted'}
+                />
+              </button>
+              <div className="flex items-center gap-1">
+                <ActionButton onClick={() => handleDuplicate(p.id)} label="複製" />
+                <ActionButton
+                  onClick={() => setView({ mode: 'edit', id: p.id })}
+                  label="編集"
+                  primary
+                />
+                <ActionButton
+                  onClick={() => handleDelete(p.id, p.name)}
+                  label="削除"
+                  danger
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </section>
     </div>
+  );
+}
+
+function ActionButton({
+  onClick,
+  label,
+  primary,
+  danger,
+}: {
+  onClick: () => void;
+  label: string;
+  primary?: boolean;
+  danger?: boolean;
+}) {
+  const cls = primary
+    ? 'border-accent-pine/40 text-accent-pine hover:bg-accent-pine/10'
+    : danger
+      ? 'border-accent-terracotta/40 text-accent-terracotta hover:bg-accent-terracotta/10'
+      : 'border-ink-muted/30 text-ink-secondary hover:text-ink-primary hover:border-ink-muted/60';
+  return (
+    <button onClick={onClick} className={`px-2.5 py-1 rounded border text-[11px] ${cls}`}>
+      {label}
+    </button>
   );
 }

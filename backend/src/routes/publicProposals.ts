@@ -2,23 +2,43 @@ import { Hono } from 'hono';
 import { prisma } from '../db.js';
 
 // お客様向けの公開エンドポイント。
-// PINチェックは X-Proposal-Pin ヘッダー または ?pin=xxxx クエリで受け付ける。
-// 簡易PIN方式のため、レート制限や試行ロックはMVPでは未実装（要件追加時に追加）。
+// 顧客のアクセスコード(4桁)で認証する。
+// 認証はクエリ ?code= または X-Access-Code ヘッダー どちらでも可。
 
 export const publicProposalsRoute = new Hono();
 
+// 提案メタ情報のみ (顧客名表示用 / 認証前)
+publicProposalsRoute.get('/:slug/meta', async (c) => {
+  const slug = c.req.param('slug');
+  const proposal = await prisma.proposal.findUnique({
+    where: { slug },
+    include: { customer: { select: { name: true, companyName: true } } },
+  });
+  if (!proposal) {
+    return c.json({ error: '提案が見つかりません', code: 'NOT_FOUND' }, 404);
+  }
+  return c.json({
+    data: {
+      slug: proposal.slug,
+      customerName: proposal.customer.name,
+      companyName: proposal.customer.companyName,
+    },
+  });
+});
+
+// 提案の本文 (認証必須)
 publicProposalsRoute.get('/:slug', async (c) => {
   const slug = c.req.param('slug');
-  const pin = c.req.header('x-proposal-pin') ?? c.req.query('pin');
+  const code = c.req.header('x-access-code') ?? c.req.query('code');
 
-  if (!pin) {
-    return c.json({ error: 'PINコードを入力してください', code: 'PIN_REQUIRED' }, 401);
+  if (!code) {
+    return c.json({ error: 'アクセスコードを入力してください', code: 'CODE_REQUIRED' }, 401);
   }
 
   const proposal = await prisma.proposal.findUnique({
     where: { slug },
     include: {
-      customer: { select: { name: true, nameKana: true } },
+      customer: true,
       items: { include: { property: true }, orderBy: { order: 'asc' } },
     },
   });
@@ -27,15 +47,24 @@ publicProposalsRoute.get('/:slug', async (c) => {
     return c.json({ error: '提案が見つかりません', code: 'NOT_FOUND' }, 404);
   }
 
-  if (proposal.pin !== pin) {
-    return c.json({ error: 'PINコードが一致しません', code: 'PIN_MISMATCH' }, 401);
+  if (proposal.customer.accessCode !== code) {
+    return c.json({ error: 'アクセスコードが一致しません', code: 'CODE_MISMATCH' }, 401);
   }
 
-  if (proposal.expiresAt && proposal.expiresAt < new Date()) {
-    return c.json({ error: 'この提案は有効期限切れです', code: 'EXPIRED' }, 410);
-  }
-
-  // 公開レスポンスには pin を含めない
-  const { pin: _pin, ...safe } = proposal;
-  return c.json({ data: safe });
+  return c.json({
+    data: {
+      id: proposal.id,
+      slug: proposal.slug,
+      title: proposal.title,
+      message: proposal.message,
+      status: proposal.status,
+      createdAt: proposal.createdAt,
+      updatedAt: proposal.updatedAt,
+      customer: {
+        name: proposal.customer.name,
+        companyName: proposal.customer.companyName,
+      },
+      items: proposal.items,
+    },
+  });
 });
