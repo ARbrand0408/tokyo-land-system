@@ -1,0 +1,35 @@
+# Render Blueprint — TOKYO LAND backend
+# 参考: https://render.com/docs/blueprint-spec
+#
+# 使い方:
+#   1. このリポジトリを Render の "New > Blueprint" で読み込ませる
+#   2. Environment Variables に Neon の DATABASE_URL を設定
+#   3. Deploy で自動セットアップ
+services:
+  - type: web
+    name: tokyo-land-api
+    env: node
+    plan: starter # free でも動くが sleep するので starter 推奨
+    region: singapore # Neon の ap-southeast-1 に合わせる
+    rootDir: backend
+    buildCommand: npm install && npm run build && npx prisma db push --skip-generate
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000 # Render が要求するデフォルトポート
+      - key: DATABASE_URL
+        sync: false # Render ダッシュボードで手動設定 (Neon の接続文字列)
+      - key: ALLOWED_ORIGINS
+        sync: false # Vercel のフロントエンドURL (例: https://tokyo-land.vercel.app)
+      - key: PUBLIC_BASE_URL
+        sync: false # Render のサービスURL (例: https://tokyo-land-api.onrender.com)
+    # アップロードファイル保存用の永続ディスク (画像アップロードを使うなら必須)
+    # 無料プランでは利用不可。Starterプラン以上で月 $1/GB
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/backend/uploads
+      sizeGB: 1

@@ -55,7 +55,7 @@ uploadRoute.post('/', async (c) => {
   await writeFile(absPath, buffer);
 
   // In production this URL would be the S3/CloudFront public URL.
-  const url = `${publicBaseUrl(c.req.header('host'))}/uploads/${key}`;
+  const url = `${publicBaseUrl(c.req)}/uploads/${key}`;
 
   return c.json(
     {
@@ -89,6 +89,13 @@ function mimeToExt(mime: string): string {
   }
 }
 
-function publicBaseUrl(host: string | undefined): string {
-  return host ? `http://${host}` : 'http://localhost:3001';
+// PUBLIC_BASE_URL が設定されていればそれを使う (本番推奨)。
+// なければ X-Forwarded-Proto / Host から推測する。Render などは https。
+function publicBaseUrl(req: { header: (name: string) => string | undefined }): string {
+  const explicit = process.env.PUBLIC_BASE_URL;
+  if (explicit) return explicit.replace(/\/$/, '');
+  const host = req.header('host');
+  if (!host) return 'http://localhost:3001';
+  const proto = req.header('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  return `${proto}://${host}`;
 }

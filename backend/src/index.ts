@@ -11,11 +11,19 @@ import { publicProposalsRoute } from './routes/publicProposals.js';
 
 const app = new Hono();
 
+// 許可するフロントエンドのオリジン。
+//   - 開発時のデフォルト: localhost:5173
+//   - 本番: ALLOWED_ORIGINS にカンマ区切りで設定 (例: https://app.example.com,https://www.example.com)
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use('*', logger());
 app.use(
   '/api/*',
   cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: ALLOWED_ORIGINS,
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-Access-Code'],
   }),
@@ -23,7 +31,7 @@ app.use(
 app.use(
   '/uploads/*',
   cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: ALLOWED_ORIGINS,
     allowMethods: ['GET'],
   }),
 );
