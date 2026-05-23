@@ -10,6 +10,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 管理者(スタッフ) - 管理画面にログインできるユーザー
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String                       // PBKDF2-SHA512 ハッシュ ("salt:hash" 形式)
+  name         String                       // 表示名 (例: 山田 雅人)
+  role         String   @default("staff")   // staff / admin
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 // 顧客 - お客様情報。1顧客に対し複数の提案が紐付く。
 model Customer {
   id           String   @id @default(cuid())

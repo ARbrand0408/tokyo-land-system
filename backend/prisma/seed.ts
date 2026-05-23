@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
+import { hashPassword } from '../src/lib/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -13,6 +14,22 @@ async function main() {
   await prisma.proposal.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.property.deleteMany();
+
+  console.log('Seeding admin user...');
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? 'admin@tokyo-land.com').toLowerCase();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'password123';
+  const adminName = process.env.SEED_ADMIN_NAME ?? '山田 雅人';
+  await prisma.admin.upsert({
+    where: { email: adminEmail },
+    update: { passwordHash: hashPassword(adminPassword), name: adminName },
+    create: {
+      email: adminEmail,
+      passwordHash: hashPassword(adminPassword),
+      name: adminName,
+      role: 'admin',
+    },
+  });
+  console.log(`  -> ${adminEmail} / ${adminPassword}`);
 
   console.log('Seeding properties...');
   const propertyA = await prisma.property.create({

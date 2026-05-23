@@ -7,6 +7,8 @@ import { propertiesRoute } from './routes/properties.js';
 import { uploadRoute } from './routes/upload.js';
 import { proposalsRoute } from './routes/proposals.js';
 import { publicProposalsRoute } from './routes/publicProposals.js';
+import { authRoute } from './routes/auth.js';
+import { requireAuth } from './middleware/requireAuth.js';
 
 const app = new Hono();
 
@@ -45,6 +47,8 @@ app.get('/', (c) =>
     name: 'TOKYO LAND API',
     version: '0.2.0',
     endpoints: [
+      '/api/auth/login',
+      '/api/auth/me',
       '/api/customers',
       '/api/properties',
       '/api/upload',
@@ -56,11 +60,22 @@ app.get('/', (c) =>
 
 app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-app.route('/api/customers', customersRoute);
-app.route('/api/properties', propertiesRoute);
-app.route('/api/upload', uploadRoute);
-app.route('/api/proposals', proposalsRoute);
+// 認証関連 (ログインは public, /me だけ JWT 必須)
+app.route('/api/auth', authRoute);
+
+// お客様向け公開エンドポイント (PIN コードで認証)
 app.route('/api/p', publicProposalsRoute);
+
+// 管理画面用エンドポイント - JWT 認証必須
+// (各ルートの中で requireAuth を適用しても良いが、
+//  ここで一括して保護する方が抜け漏れが少ない)
+const adminApi = new Hono();
+adminApi.use('*', requireAuth);
+adminApi.route('/customers', customersRoute);
+adminApi.route('/properties', propertiesRoute);
+adminApi.route('/upload', uploadRoute);
+adminApi.route('/proposals', proposalsRoute);
+app.route('/api', adminApi);
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
 
@@ -72,6 +87,12 @@ app.onError((err, c) => {
 if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
   console.warn(
     '[warn] Cloudinary credentials are not fully set. Image uploads will fail until CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET are configured.',
+  );
+}
+
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
+  console.warn(
+    '[warn] JWT_SECRET is not set or too short. Admin login will fail until JWT_SECRET (>=16 chars) is configured.',
   );
 }
 

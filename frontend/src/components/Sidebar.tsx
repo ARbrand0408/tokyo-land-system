@@ -1,3 +1,5 @@
+import type { AuthUser } from '../lib/auth';
+
 type ViewKey = 'dashboard' | 'properties' | 'customers';
 
 type NavItem = {
@@ -16,9 +18,18 @@ const items: NavItem[] = [
 type Props = {
   active: ViewKey;
   onChange: (key: ViewKey) => void;
+  user: AuthUser;
+  onLogout: () => void;
 };
 
-export function Sidebar({ active, onChange }: Props) {
+// 名前から先頭文字を取得 (日本語名は姓の1文字目を、英字は1文字目を)
+function initialOf(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  return Array.from(trimmed)[0] ?? '?';
+}
+
+export function Sidebar({ active, onChange, user, onLogout }: Props) {
   return (
     <aside className="w-64 shrink-0 bg-bg-card border-r border-ink-muted/15 flex flex-col">
       <div className="px-6 pt-8 pb-10 border-b border-ink-muted/15">
@@ -62,13 +73,20 @@ export function Sidebar({ active, onChange }: Props) {
       <div className="px-6 py-5 border-t border-ink-muted/15">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-accent-terracotta/20 flex items-center justify-center font-serif text-accent-terracotta">
-            山
+            {initialOf(user.name)}
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-ink-primary">山田 雅人</span>
-            <span className="text-[11px] text-ink-muted">担当営業 / 港区エリア</span>
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-sm font-medium text-ink-primary truncate">{user.name}</span>
+            <span className="text-[11px] text-ink-muted truncate">{user.email}</span>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="mt-3 w-full text-[11px] text-ink-secondary hover:text-ink-primary border border-ink-muted/30 hover:border-ink-muted/60 rounded py-1.5 transition-colors"
+        >
+          ログアウト
+        </button>
       </div>
     </aside>
   );
