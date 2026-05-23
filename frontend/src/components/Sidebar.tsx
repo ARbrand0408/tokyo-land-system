@@ -22,6 +22,13 @@ type Props = {
   onLogout: () => void;
 };
 
+// 表示用の名前。空文字 / 取得失敗時は「管理者」にフォールバック。
+const FALLBACK_NAME = '管理者';
+function displayNameOf(user: AuthUser): string {
+  const name = user.name?.trim();
+  return name && name.length > 0 ? name : FALLBACK_NAME;
+}
+
 // 名前から先頭文字を取得 (日本語名は姓の1文字目を、英字は1文字目を)
 function initialOf(name: string): string {
   const trimmed = name.trim();
@@ -30,6 +37,7 @@ function initialOf(name: string): string {
 }
 
 export function Sidebar({ active, onChange, user, onLogout }: Props) {
+  const displayName = displayNameOf(user);
   return (
     <aside className="w-64 shrink-0 bg-bg-card border-r border-ink-muted/15 flex flex-col">
       <div className="px-6 pt-8 pb-10 border-b border-ink-muted/15">
@@ -73,10 +81,10 @@ export function Sidebar({ active, onChange, user, onLogout }: Props) {
       <div className="px-6 py-5 border-t border-ink-muted/15">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-accent-terracotta/20 flex items-center justify-center font-serif text-accent-terracotta">
-            {initialOf(user.name)}
+            {initialOf(displayName)}
           </div>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-sm font-medium text-ink-primary truncate">{user.name}</span>
+            <span className="text-sm font-medium text-ink-primary truncate">{displayName}</span>
             <span className="text-[11px] text-ink-muted truncate">{user.email}</span>
           </div>
         </div>
