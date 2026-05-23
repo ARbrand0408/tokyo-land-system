@@ -10,6 +10,8 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:admin": "tsx prisma/seedAdmin.ts",
+    "db:update:admin-name": "tsx prisma/updateAdminName.ts",
+    "db:list:admins": "tsx prisma/listAdmins.ts",
     "db:studio": "prisma studio",
     "prisma:generate": "prisma generate"
   },
