@@ -32,7 +32,10 @@ export function deleteProposal(id: string) {
   return api.delete<{ ok: boolean }>(`/api/proposals/${id}`);
 }
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+const BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  import.meta.env.VITE_API_BASE_URL ??
+  'http://localhost:3001';
 
 export type PublicProposalError = {
   code: 'CODE_REQUIRED' | 'CODE_MISMATCH' | 'NOT_FOUND' | 'UNKNOWN';
