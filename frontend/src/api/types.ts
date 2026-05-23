@@ -145,6 +145,6 @@ export type UploadedAsset = {
   fileName: string;
   contentType: string;
   size: number;
-  storage: 's3-mock';
+  storage: 'cloudinary';
   uploadedAt: string;
 };

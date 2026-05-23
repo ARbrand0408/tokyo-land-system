@@ -1,15 +1,10 @@
 import { Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
+import { CLOUDINARY_FOLDER, uploadBufferToCloudinary } from '../lib/cloudinary.js';
 
-// MOCK: stand-in for S3-compatible object storage (R2 / MinIO / S3 etc).
-// Writes uploads to backend/uploads/ and returns a URL pointing at the
-// /uploads/:id static route. Swap the persistence block below for an
-// AWS SDK PutObjectCommand once a real bucket is provisioned.
+// 画像はすべて Cloudinary に保存する。
+// 認証情報は backend/src/lib/cloudinary.ts が環境変数から読み込む。
 
-const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 const ALLOWED_KINDS = ['property_image', 'floor_plan'] as const;
 type UploadKind = (typeof ALLOWED_KINDS)[number];
 
@@ -44,58 +39,33 @@ uploadRoute.post('/', async (c) => {
   }
 
   const id = randomUUID();
-  const ext = path.extname(file.name) || mimeToExt(file.type);
-  const key = `${kindValue}/${id}${ext}`;
-  const absPath = path.join(UPLOAD_DIR, key);
-
-  if (!existsSync(path.dirname(absPath))) {
-    await mkdir(path.dirname(absPath), { recursive: true });
-  }
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(absPath, buffer);
 
-  // In production this URL would be the S3/CloudFront public URL.
-  const url = `${publicBaseUrl(c.req)}/uploads/${key}`;
+  try {
+    const result = await uploadBufferToCloudinary(buffer, {
+      folder: `${CLOUDINARY_FOLDER}/${kindValue}`,
+      publicId: id,
+      resourceType: 'image',
+    });
 
-  return c.json(
-    {
-      data: {
-        id,
-        url,
-        kind: kindValue,
-        fileName: file.name,
-        contentType: file.type,
-        size: file.size,
-        storage: 's3-mock',
-        uploadedAt: new Date().toISOString(),
+    return c.json(
+      {
+        data: {
+          id: result.public_id,
+          url: result.secure_url,
+          kind: kindValue,
+          fileName: file.name,
+          contentType: file.type,
+          size: file.size,
+          storage: 'cloudinary',
+          uploadedAt: new Date().toISOString(),
+        },
       },
-    },
-    201,
-  );
-});
-
-function mimeToExt(mime: string): string {
-  switch (mime) {
-    case 'image/png':
-      return '.png';
-    case 'image/jpeg':
-      return '.jpg';
-    case 'image/webp':
-      return '.webp';
-    case 'image/gif':
-      return '.gif';
-    default:
-      return '';
+      201,
+    );
+  } catch (err) {
+    console.error('[upload] Cloudinary upload failed', err);
+    const message = err instanceof Error ? err.message : 'Cloudinary upload failed';
+    return c.json({ error: 'Upload failed', message }, 502);
   }
-}
-
-// PUBLIC_BASE_URL が設定されていればそれを使う (本番推奨)。
-// なければ X-Forwarded-Proto / Host から推測する。Render などは https。
-function publicBaseUrl(req: { header: (name: string) => string | undefined }): string {
-  const explicit = process.env.PUBLIC_BASE_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
-  const host = req.header('host');
-  if (!host) return 'http://localhost:3001';
-  const proto = req.header('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-  return `${proto}://${host}`;
-}
+});

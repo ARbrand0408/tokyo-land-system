@@ -1,5 +1,4 @@
 import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -40,13 +39,6 @@ app.use(
     allowHeaders: ['Content-Type', 'Authorization', 'X-Access-Code'],
   }),
 );
-app.use(
-  '/uploads/*',
-  cors({
-    origin: resolveOrigin,
-    allowMethods: ['GET'],
-  }),
-);
 
 app.get('/', (c) =>
   c.json({
@@ -70,14 +62,18 @@ app.route('/api/upload', uploadRoute);
 app.route('/api/proposals', proposalsRoute);
 app.route('/api/p', publicProposalsRoute);
 
-app.use('/uploads/*', serveStatic({ root: './' }));
-
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
 
 app.onError((err, c) => {
   console.error(err);
   return c.json({ error: 'Internal Server Error', message: err.message }, 500);
 });
+
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.warn(
+    '[warn] Cloudinary credentials are not fully set. Image uploads will fail until CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET are configured.',
+  );
+}
 
 const port = Number(process.env.PORT ?? 3001);
 serve({ fetch: app.fetch, port }, (info) => {
