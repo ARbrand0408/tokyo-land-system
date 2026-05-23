@@ -352,11 +352,15 @@ function ProposalRow({
       <div className="flex items-center gap-1">
         <RowAction onClick={onPreview} label="プレビュー" />
         <RowAction
-          onClick={() => copy(`${url}?code=${customerAccessCode}`, 'url')}
-          label={copied === 'url' ? '✓ コピー' : 'リンクコピー'}
+          onClick={() => copy(url, 'url')}
+          label={copied === 'url' ? '✓ URLコピー' : 'リンクコピー'}
+        />
+        <RowAction
+          onClick={() => copy(customerAccessCode, 'code')}
+          label={copied === 'code' ? '✓ PINコピー' : 'PINコピー'}
         />
         <a
-          href={`${url}?code=${customerAccessCode}`}
+          href={url}
           target="_blank"
           rel="noreferrer"
           className="px-2.5 py-1 rounded border border-ink-muted/30 text-[11px] text-ink-secondary hover:text-ink-primary hover:border-ink-muted/60"

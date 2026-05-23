@@ -15,29 +15,26 @@ type Stage = 'loading' | 'auth' | 'list' | 'detail';
 
 // 実機表示 (URLからアクセス) ではiOSフレームを表示せず、画面全体を使う
 export function CustomerProposal({ slug }: Props) {
-  const params = new URLSearchParams(window.location.search);
-  const initialCode = params.get('code') ?? '';
-
   const [meta, setMeta] = useState<PublicProposalMeta | null>(null);
   const [proposal, setProposal] = useState<PublicProposal | null>(null);
   const [stage, setStage] = useState<Stage>('loading');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // URLに ?code=xxx が付いていても自動ログインさせず、必ず4桁PIN入力を求める。
+  // 古いリンクからアクセスされた場合に備えて、クエリパラメータは履歴から取り除いておく。
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('code')) {
+      url.searchParams.delete('code');
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    }
+  }, []);
+
   useEffect(() => {
     fetchPublicProposalMeta(slug)
-      .then(async (m) => {
+      .then((m) => {
         setMeta(m);
-        if (initialCode) {
-          try {
-            const data = await fetchPublicProposal(slug, initialCode);
-            setProposal(data);
-            setStage('list');
-            return;
-          } catch {
-            // fall through
-          }
-        }
         setStage('auth');
       })
       .catch((err: PublicProposalError) => {
@@ -45,7 +42,7 @@ export function CustomerProposal({ slug }: Props) {
         setStage('auth');
         setAuthError(err.message ?? '提案が見つかりません');
       });
-  }, [slug, initialCode]);
+  }, [slug]);
 
   const onAuthenticated = async (code: string) => {
     try {
