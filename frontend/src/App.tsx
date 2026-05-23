@@ -23,10 +23,10 @@ function App() {
     return <CustomerProposal slug={customerMatch[1]} />;
   }
 
-  return <AdminApp />;
+  return <AdminApp path={path} />;
 }
 
-function AdminApp() {
+function AdminApp({ path }: { path: string }) {
   // ログイン状態。初回マウント時に localStorage を読みに行く。
   const [user, setUser] = useState<AuthUser | null>(() => (getToken() ? getUser() : null));
   const [bootstrapping, setBootstrapping] = useState<boolean>(() => Boolean(getToken()));
@@ -69,6 +69,20 @@ function AdminApp() {
       cancelled = true;
     };
   }, []);
+
+  // /login にいるときはブートストラップ完了を待たずにログイン画面を出す。
+  // (401 を受けて遷移してきた直後のチラ見え防止)
+  if (path === '/login') {
+    return (
+      <Login
+        onLoggedIn={() => {
+          // ログイン成功後はトップに戻す。
+          window.history.replaceState({}, '', '/');
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }}
+      />
+    );
+  }
 
   if (bootstrapping) {
     return (

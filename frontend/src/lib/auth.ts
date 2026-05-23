@@ -51,3 +51,16 @@ export function onAuthChange(handler: () => void): () => void {
     window.removeEventListener('storage', handler);
   };
 }
+
+// 401 を受け取った時に呼ぶ。セッションを破棄して /login へ強制遷移する。
+// すでに /login or 顧客向けページにいる場合は遷移しない (ループ防止)。
+export function redirectToLogin(): void {
+  clearSession();
+  const path = window.location.pathname;
+  if (path === '/login') return;
+  // 顧客向け公開ページ (/p/xxx) は管理者ログインを要求しない
+  if (path.startsWith('/p/')) return;
+  // pushState + popstate で SPA 内遷移として扱う
+  window.history.pushState({}, '', '/login');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}

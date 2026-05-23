@@ -1,4 +1,4 @@
-import { clearSession, getToken } from '../lib/auth';
+import { getToken, redirectToLogin } from '../lib/auth';
 
 const BASE_URL =
   import.meta.env.VITE_API_URL ??
@@ -41,7 +41,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     if (res.status === 401 && shouldAttachToken(path)) {
-      clearSession();
+      redirectToLogin();
     }
     let detail = '';
     try {
@@ -80,7 +80,7 @@ export const api = {
     });
     if (!res.ok) {
       if (res.status === 401 && shouldAttachToken(path)) {
-        clearSession();
+        redirectToLogin();
       }
       let detail = '';
       try {
