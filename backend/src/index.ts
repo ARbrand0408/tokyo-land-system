@@ -12,18 +12,30 @@ import { publicProposalsRoute } from './routes/publicProposals.js';
 const app = new Hono();
 
 // 許可するフロントエンドのオリジン。
-//   - 開発時のデフォルト: localhost:5173
+//   - 開発時のデフォルト: localhost:5173 / 127.0.0.1:5173 / すべての *.vercel.app
 //   - 本番: ALLOWED_ORIGINS にカンマ区切りで設定 (例: https://app.example.com,https://www.example.com)
+//   - ALLOWED_ORIGINS に "*" を含めるとすべてのオリジンを許可
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
 
+const ALLOW_ALL_ORIGINS = ALLOWED_ORIGINS.includes('*');
+
+const resolveOrigin = (origin: string): string | null => {
+  if (ALLOW_ALL_ORIGINS) return origin || '*';
+  if (!origin) return null;
+  if (ALLOWED_ORIGINS.includes(origin)) return origin;
+  // Vercel のプロダクション / プレビューデプロイメントを許可
+  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return origin;
+  return null;
+};
+
 app.use('*', logger());
 app.use(
   '/api/*',
   cors({
-    origin: ALLOWED_ORIGINS,
+    origin: resolveOrigin,
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-Access-Code'],
   }),
@@ -31,7 +43,7 @@ app.use(
 app.use(
   '/uploads/*',
   cors({
-    origin: ALLOWED_ORIGINS,
+    origin: resolveOrigin,
     allowMethods: ['GET'],
   }),
 );
