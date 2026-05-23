@@ -15,7 +15,7 @@ model Admin {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String                       // PBKDF2-SHA512 ハッシュ ("salt:hash" 形式)
-  name         String                       // 表示名 (例: 山田 雅人)
+  name         String                       // 表示名 (例: 【管理者】)
   role         String   @default("staff")   // staff / admin
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

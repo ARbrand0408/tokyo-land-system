@@ -16,9 +16,11 @@ async function main() {
   await prisma.property.deleteMany();
 
   console.log('Seeding admin user...');
-  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? 'admin@tokyo-land.com').toLowerCase();
+  // フレッシュセットアップ用なので password にはデフォルトを残す (環境変数で上書き可)。
+  // email / name は本番管理者と揃えておくことで誤実行時の差分を減らす。
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? 'arbrand@tokyo-land.net').toLowerCase();
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'password123';
-  const adminName = process.env.SEED_ADMIN_NAME ?? '山田 雅人';
+  const adminName = process.env.SEED_ADMIN_NAME ?? '【管理者】';
   await prisma.admin.upsert({
     where: { email: adminEmail },
     update: { passwordHash: hashPassword(adminPassword), name: adminName },
