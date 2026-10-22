@@ -1,16 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 
 type Props = {
-  customerName: string;
+  // null のときは顧客名ブロックを出さない（meta 取得前など）
+  customerName: string | null;
   // 正しいコード（クライアントサイド検証用 = プレビュー時のみ）
   correctCode?: string;
   // 実際のAPI認証時に使う送信ハンドラ
   onAuthenticated: (code: string) => void;
   errorMessage?: string | null;
   submitting?: boolean;
+  // 提案が存在しないとき。入力欄とボタンを出さない
+  notFound?: boolean;
+  hint?: string | null;
 };
 
-export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, errorMessage, submitting }: Props) {
+export function CustomerAppAuth({
+  customerName,
+  correctCode,
+  onAuthenticated,
+  errorMessage,
+  submitting,
+  notFound,
+  hint,
+}: Props) {
   const [digits, setDigits] = useState(['', '', '', '']);
   // ローカル検証エラー（桁数不足・correctCode 不一致）専用。APIエラーは errorMessage で受け取る
   const [localError, setLocalError] = useState<string | null>(null);
@@ -24,8 +36,9 @@ export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, er
 
   // 親からエラーが届いたら入力をクリアして再入力を促す
   useEffect(() => {
+    if (notFound) return;
     if (errorMessage != null) resetDigits();
-  }, [errorMessage]);
+  }, [errorMessage, notFound]);
 
   const setDigit = (idx: number, v: string) => {
     const clean = v.replace(/[^0-9]/g, '').slice(0, 1);
@@ -69,48 +82,63 @@ export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, er
         <div className="font-mono text-[10px] text-ink-muted mt-1 tracking-widest">CUSTOMER PROPOSAL</div>
       </div>
 
-      <div className="text-center mb-6">
-        <div className="text-[11px] text-ink-muted tracking-widest uppercase">お客様</div>
-        <div className="font-serif text-lg text-ink-primary mt-1">{customerName} 様</div>
-      </div>
+      {customerName != null ? (
+        <div className="text-center mb-6">
+          <div className="text-[11px] text-ink-muted tracking-widest uppercase">お客様</div>
+          <div className="font-serif text-lg text-ink-primary mt-1">{customerName} 様</div>
+        </div>
+      ) : (
+        // 顧客名の取得前もレイアウトがずれないよう高さを確保する
+        <div className="h-[52px] mb-6" />
+      )}
 
-      <h1 className="font-serif text-base text-ink-primary text-center">アクセスコードを入力</h1>
+      <h1 className="font-serif text-base text-ink-primary text-center">
+        {notFound ? 'この提案は見つかりません' : 'アクセスコードを入力'}
+      </h1>
       <p className="text-[11px] text-ink-muted text-center mt-1">
-        担当者からお伝えした4桁の数字をご入力ください
+        {notFound
+          ? 'URLが正しいかご確認のうえ、担当者までお問い合わせください'
+          : '担当者からお伝えした4桁の数字をご入力ください'}
       </p>
 
-      <div className="flex justify-center gap-2 mt-6">
-        {digits.map((d, i) => (
-          <input
-            key={i}
-            ref={(el) => {
-              inputs.current[i] = el;
-            }}
-            value={d}
-            onChange={(e) => setDigit(i, e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
-              if (e.key === 'Enter' && !submitting) submit();
-            }}
-            onPaste={onPaste}
-            disabled={submitting}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={1}
-            className="w-12 h-14 rounded-lg bg-bg-white border border-ink-muted/30 text-center font-mono text-2xl text-ink-primary focus:outline-none focus:ring-2 focus:ring-accent-pine/40"
-          />
-        ))}
-      </div>
+      {!notFound && (
+        <>
+          <div className="flex justify-center gap-2 mt-6">
+            {digits.map((d, i) => (
+              <input
+                key={i}
+                ref={(el) => {
+                  inputs.current[i] = el;
+                }}
+                value={d}
+                onChange={(e) => setDigit(i, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
+                  if (e.key === 'Enter' && !submitting) submit();
+                }}
+                onPaste={onPaste}
+                disabled={submitting}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={1}
+                className="w-12 h-14 rounded-lg bg-bg-white border border-ink-muted/30 text-center font-mono text-2xl text-ink-primary focus:outline-none focus:ring-2 focus:ring-accent-pine/40"
+              />
+            ))}
+          </div>
 
-      {error && <div className="mt-4 text-xs text-center text-accent-terracotta">{error}</div>}
+          {hint && <div className="text-[11px] text-ink-muted text-center mt-3">{hint}</div>}
 
-      <button
-        onClick={submit}
-        disabled={submitting || digits.join('').length !== 4}
-        className="mt-6 w-full py-3 rounded-lg bg-accent-pine text-bg-white text-sm font-medium hover:bg-accent-pine/90 disabled:opacity-40"
-      >
-        {submitting ? '確認中…' : '閲覧する'}
-      </button>
+          {error && <div className="mt-4 text-xs text-center text-accent-terracotta">{error}</div>}
+
+          <button
+            onClick={submit}
+            disabled={submitting || digits.join('').length !== 4}
+            className="mt-6 w-full py-3 rounded-lg bg-accent-pine text-bg-white text-sm font-medium hover:bg-accent-pine/90 disabled:opacity-40"
+          >
+            {submitting ? '確認中…' : '閲覧する'}
+          </button>
+        </>
+      )}
 
       <div className="mt-auto pt-10 text-[10px] text-center text-ink-muted">
         コードが分からない場合は担当者までお問い合わせください

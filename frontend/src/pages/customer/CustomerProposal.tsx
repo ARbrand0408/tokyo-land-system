@@ -11,13 +11,16 @@ import { CustomerAppDetail } from './CustomerAppDetail';
 
 type Props = { slug: string };
 
-type Stage = 'loading' | 'auth' | 'list' | 'detail';
+type Stage = 'auth' | 'list' | 'detail';
+type MetaStatus = 'loading' | 'ready' | 'notFound' | 'error';
 
 // 実機表示 (URLからアクセス) ではiOSフレームを表示せず、画面全体を使う
 export function CustomerProposal({ slug }: Props) {
   const [meta, setMeta] = useState<PublicProposalMeta | null>(null);
   const [proposal, setProposal] = useState<PublicProposal | null>(null);
-  const [stage, setStage] = useState<Stage>('loading');
+  const [stage, setStage] = useState<Stage>('auth');
+  const [metaStatus, setMetaStatus] = useState<MetaStatus>('loading');
+  const [connectingHint, setConnectingHint] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -32,18 +35,47 @@ export function CustomerProposal({ slug }: Props) {
     }
   }, []);
 
+  // PIN画面は即表示し、meta はバックグラウンドで取得する（Render のスリープ復帰のウォームアップも兼ねる）
   useEffect(() => {
-    fetchPublicProposalMeta(slug)
-      .then((m) => {
-        setMeta(m);
-        setStage('auth');
-      })
-      .catch((err: PublicProposalError) => {
-        setMeta(null);
-        setStage('auth');
-        setAuthError(err.message ?? '提案が見つかりません');
-      });
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    const load = (isRetry: boolean) => {
+      fetchPublicProposalMeta(slug)
+        .then((m) => {
+          if (cancelled) return;
+          setMeta(m);
+          setMetaStatus('ready');
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          if ((err as Partial<PublicProposalError> | null)?.code === 'NOT_FOUND') {
+            setMetaStatus('notFound');
+            return;
+          }
+          // ネットワークエラー等は3秒後に1回だけリトライ。再失敗でもPIN送信時に再通信するので画面は出したまま
+          if (isRetry) {
+            setMetaStatus('error');
+            return;
+          }
+          retryTimer = window.setTimeout(() => load(true), 3000);
+        });
+    };
+    load(false);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryTimer);
+    };
   }, [slug]);
+
+  // meta の取得が2秒を超えたら「接続中」ヒントを出す
+  useEffect(() => {
+    if (metaStatus !== 'loading') {
+      setConnectingHint(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setConnectingHint(true), 2000);
+    return () => window.clearTimeout(timer);
+  }, [metaStatus]);
 
   const onAuthenticated = async (code: string) => {
     // 毎回 null に戻してから再設定し、同じメッセージの連続失敗でも子の useEffect を発火させる
@@ -61,16 +93,14 @@ export function CustomerProposal({ slug }: Props) {
     }
   };
 
-  if (stage === 'loading') {
-    return <div className="min-h-screen bg-bg-base flex items-center justify-center text-ink-muted">読み込み中…</div>;
-  }
-
   return (
     <div className="min-h-screen bg-bg-base flex justify-center">
       <div className="w-full max-w-md bg-bg-card min-h-screen">
         {stage === 'auth' && (
           <CustomerAppAuth
-            customerName={meta?.customerName ?? 'お客様'}
+            customerName={metaStatus === 'ready' ? meta?.customerName ?? null : null}
+            notFound={metaStatus === 'notFound'}
+            hint={connectingHint ? 'サーバーに接続しています…' : null}
             errorMessage={authError}
             submitting={submitting}
             onAuthenticated={(c) => onAuthenticated(c)}
