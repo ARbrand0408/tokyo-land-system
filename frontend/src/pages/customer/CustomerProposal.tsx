@@ -20,6 +20,7 @@ export function CustomerProposal({ slug }: Props) {
   const [stage, setStage] = useState<Stage>('loading');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // URLに ?code=xxx が付いていても自動ログインさせず、必ず4桁PIN入力を求める。
   // 古いリンクからアクセスされた場合に備えて、クエリパラメータは履歴から取り除いておく。
@@ -45,6 +46,9 @@ export function CustomerProposal({ slug }: Props) {
   }, [slug]);
 
   const onAuthenticated = async (code: string) => {
+    // 毎回 null に戻してから再設定し、同じメッセージの連続失敗でも子の useEffect を発火させる
+    setAuthError(null);
+    setSubmitting(true);
     try {
       const data = await fetchPublicProposal(slug, code);
       setProposal(data);
@@ -52,6 +56,8 @@ export function CustomerProposal({ slug }: Props) {
     } catch (err) {
       const e = err as PublicProposalError;
       setAuthError(e.message ?? '認証に失敗しました');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -66,6 +72,7 @@ export function CustomerProposal({ slug }: Props) {
           <CustomerAppAuth
             customerName={meta?.customerName ?? 'お客様'}
             errorMessage={authError}
+            submitting={submitting}
             onAuthenticated={(c) => onAuthenticated(c)}
           />
         )}

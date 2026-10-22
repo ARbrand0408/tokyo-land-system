@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type Props = {
   customerName: string;
@@ -7,12 +7,25 @@ type Props = {
   // 実際のAPI認証時に使う送信ハンドラ
   onAuthenticated: (code: string) => void;
   errorMessage?: string | null;
+  submitting?: boolean;
 };
 
-export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, errorMessage }: Props) {
+export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, errorMessage, submitting }: Props) {
   const [digits, setDigits] = useState(['', '', '', '']);
-  const [error, setError] = useState<string | null>(errorMessage ?? null);
+  // ローカル検証エラー（桁数不足・correctCode 不一致）専用。APIエラーは errorMessage で受け取る
+  const [localError, setLocalError] = useState<string | null>(null);
   const inputs = useRef<Array<HTMLInputElement | null>>([null, null, null, null]);
+  const error = localError ?? errorMessage ?? null;
+
+  const resetDigits = () => {
+    setDigits(['', '', '', '']);
+    inputs.current[0]?.focus();
+  };
+
+  // 親からエラーが届いたら入力をクリアして再入力を促す
+  useEffect(() => {
+    if (errorMessage != null) resetDigits();
+  }, [errorMessage]);
 
   const setDigit = (idx: number, v: string) => {
     const clean = v.replace(/[^0-9]/g, '').slice(0, 1);
@@ -35,16 +48,17 @@ export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, er
   };
 
   const submit = () => {
+    setLocalError(null);
     const pin = digits.join('');
     if (pin.length !== 4) {
-      setError('4桁のコードを入力してください');
+      setLocalError('4桁のコードを入力してください');
       return;
     }
     if (correctCode != null && pin !== correctCode) {
-      setError('アクセスコードが一致しません');
+      setLocalError('アクセスコードが一致しません');
+      resetDigits();
       return;
     }
-    setError(null);
     onAuthenticated(pin);
   };
 
@@ -76,9 +90,10 @@ export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, er
             onChange={(e) => setDigit(i, e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus();
-              if (e.key === 'Enter') submit();
+              if (e.key === 'Enter' && !submitting) submit();
             }}
             onPaste={onPaste}
+            disabled={submitting}
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={1}
@@ -91,10 +106,10 @@ export function CustomerAppAuth({ customerName, correctCode, onAuthenticated, er
 
       <button
         onClick={submit}
-        disabled={digits.join('').length !== 4}
+        disabled={submitting || digits.join('').length !== 4}
         className="mt-6 w-full py-3 rounded-lg bg-accent-pine text-bg-white text-sm font-medium hover:bg-accent-pine/90 disabled:opacity-40"
       >
-        閲覧する
+        {submitting ? '確認中…' : '閲覧する'}
       </button>
 
       <div className="mt-auto pt-10 text-[10px] text-center text-ink-muted">
