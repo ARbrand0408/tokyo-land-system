@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   fetchPublicProposal,
   fetchPublicProposalMeta,
@@ -13,6 +13,7 @@ type Props = { slug: string };
 
 type Stage = 'auth' | 'list' | 'detail';
 type MetaStatus = 'loading' | 'ready' | 'notFound' | 'error';
+type HistoryState = { stage?: string; itemId?: string } | null;
 
 // 実機表示 (URLからアクセス) ではiOSフレームを表示せず、画面全体を使う
 export function CustomerProposal({ slug }: Props) {
@@ -24,6 +25,14 @@ export function CustomerProposal({ slug }: Props) {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // 認証前の URL に付いていた #itemId（認証後にその物件の詳細を直接開く）
+  const initialHashRef = useRef('');
+  const listScrollYRef = useRef(0);
+  const prevStageRef = useRef<Stage>('auth');
+
+  useEffect(() => {
+    initialHashRef.current = window.location.hash.slice(1);
+  }, []);
 
   // URLに ?code=xxx が付いていても自動ログインさせず、必ず4桁PIN入力を求める。
   // 古いリンクからアクセスされた場合に備えて、クエリパラメータは履歴から取り除いておく。
@@ -77,6 +86,37 @@ export function CustomerProposal({ slug }: Props) {
     return () => window.clearTimeout(timer);
   }, [metaStatus]);
 
+  // ブラウザの戻る/進むで一覧と詳細を切り替える（認証前は何もしない）
+  useEffect(() => {
+    if (!proposal) return;
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as HistoryState;
+      const itemId = state?.itemId;
+      if (state?.stage === 'detail' && itemId && proposal.items.some((i) => i.id === itemId)) {
+        setSelectedItemId(itemId);
+        setStage('detail');
+      } else {
+        setStage('list');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [proposal]);
+
+  // 詳細は先頭から表示し、詳細→一覧に戻ったら一覧のスクロール位置を復元する
+  useEffect(() => {
+    const prev = prevStageRef.current;
+    prevStageRef.current = stage;
+    if (stage === 'detail') {
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (stage === 'list' && prev === 'detail') {
+      const raf = window.requestAnimationFrame(() => window.scrollTo(0, listScrollYRef.current));
+      return () => window.cancelAnimationFrame(raf);
+    }
+  }, [stage]);
+
   const onAuthenticated = async (code: string) => {
     // 毎回 null に戻してから再設定し、同じメッセージの連続失敗でも子の useEffect を発火させる
     setAuthError(null);
@@ -84,7 +124,17 @@ export function CustomerProposal({ slug }: Props) {
     try {
       const data = await fetchPublicProposal(slug, code);
       setProposal(data);
-      setStage('list');
+      // 現在の履歴エントリを「一覧」にし、#itemId があればその詳細を上に積む
+      const { pathname } = window.location;
+      window.history.replaceState({ stage: 'list' }, '', pathname);
+      const itemId = initialHashRef.current;
+      if (itemId && data.items.some((i) => i.id === itemId)) {
+        window.history.pushState({ stage: 'detail', itemId }, '', `${pathname}#${itemId}`);
+        setSelectedItemId(itemId);
+        setStage('detail');
+      } else {
+        setStage('list');
+      }
     } catch (err) {
       // code を持たないもの（fetch の TypeError 等）はサーバー未到達として日本語で案内する
       if (typeof err === 'object' && err !== null && 'code' in err) {
@@ -115,6 +165,8 @@ export function CustomerProposal({ slug }: Props) {
           <CustomerAppList
             proposal={proposal}
             onSelectItem={(id) => {
+              listScrollYRef.current = window.scrollY;
+              window.history.pushState({ stage: 'detail', itemId: id }, '', `${window.location.pathname}#${id}`);
               setSelectedItemId(id);
               setStage('detail');
             }}
@@ -124,7 +176,8 @@ export function CustomerProposal({ slug }: Props) {
           <CustomerAppDetail
             proposal={proposal}
             itemId={selectedItemId}
-            onBack={() => setStage('list')}
+            // 画面の切替は popstate 側で行う
+            onBack={() => window.history.back()}
           />
         )}
       </div>
