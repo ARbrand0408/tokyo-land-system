@@ -27,9 +27,3 @@ services:
         sync: false # Vercel のフロントエンドURL (例: https://tokyo-land.vercel.app)
       - key: PUBLIC_BASE_URL
         sync: false # Render のサービスURL (例: https://tokyo-land-api.onrender.com)
-    # アップロードファイル保存用の永続ディスク (画像アップロードを使うなら必須)
-    # 無料プランでは利用不可。Starterプラン以上で月 $1/GB
-    disk:
-      name: uploads
-      mountPath: /opt/render/project/src/backend/uploads
-      sizeGB: 1

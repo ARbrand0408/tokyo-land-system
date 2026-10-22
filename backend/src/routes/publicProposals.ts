@@ -4,6 +4,7 @@ import { prisma } from '../db.js';
 // お客様向けの公開エンドポイント。
 // 顧客のアクセスコード(4桁)で認証する。
 // 認証はクエリ ?code= または X-Access-Code ヘッダー どちらでも可。
+// 送信済みの提案のみ公開。物件は status=公開 のみ返す。
 
 export const publicProposalsRoute = new Hono();
 
@@ -16,6 +17,10 @@ publicProposalsRoute.get('/:slug/meta', async (c) => {
   });
   if (!proposal) {
     return c.json({ error: '提案が見つかりません', code: 'NOT_FOUND' }, 404);
+  }
+  // 存在しない場合と同じ code を返し、下書きの存在を外部から区別できないようにする
+  if (proposal.status !== '送信済み') {
+    return c.json({ error: 'この提案は現在公開されていません', code: 'NOT_FOUND' }, 404);
   }
   return c.json({
     data: {
@@ -39,12 +44,17 @@ publicProposalsRoute.get('/:slug', async (c) => {
     where: { slug },
     include: {
       customer: true,
-      items: { include: { property: true }, orderBy: { order: 'asc' } },
+      items: { where: { property: { status: '公開' } }, include: { property: true }, orderBy: { order: 'asc' } },
     },
   });
 
   if (!proposal) {
     return c.json({ error: '提案が見つかりません', code: 'NOT_FOUND' }, 404);
+  }
+
+  // コード照合より前に判定し、下書きの提案に PIN 総当たりの手がかりを与えない
+  if (proposal.status !== '送信済み') {
+    return c.json({ error: 'この提案は現在公開されていません', code: 'NOT_FOUND' }, 404);
   }
 
   if (proposal.customer.accessCode !== code) {
