@@ -34,6 +34,15 @@ export function CustomerProposal({ slug }: Props) {
     initialHashRef.current = window.location.hash.slice(1);
   }, []);
 
+  // 表示中はブラウザの自動スクロール復元を止め、アプリ側の復元と競合させない
+  useEffect(() => {
+    if (!('scrollRestoration' in window.history)) return;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = 'auto';
+    };
+  }, []);
+
   // URLに ?code=xxx が付いていても自動ログインさせず、必ず4桁PIN入力を求める。
   // 古いリンクからアクセスされた場合に備えて、クエリパラメータは履歴から取り除いておく。
   useEffect(() => {
