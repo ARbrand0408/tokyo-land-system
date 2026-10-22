@@ -86,8 +86,13 @@ export function CustomerProposal({ slug }: Props) {
       setProposal(data);
       setStage('list');
     } catch (err) {
-      const e = err as PublicProposalError;
-      setAuthError(e.message ?? '認証に失敗しました');
+      // code を持たないもの（fetch の TypeError 等）はサーバー未到達として日本語で案内する
+      if (typeof err === 'object' && err !== null && 'code' in err) {
+        const e = err as PublicProposalError;
+        setAuthError(e.message ?? '認証に失敗しました');
+      } else {
+        setAuthError('サーバーに接続できませんでした。少し時間をおいて、もう一度お試しください');
+      }
     } finally {
       setSubmitting(false);
     }
