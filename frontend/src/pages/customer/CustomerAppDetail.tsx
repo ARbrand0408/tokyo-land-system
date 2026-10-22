@@ -121,15 +121,6 @@ export function CustomerAppDetail({ proposal, itemId, onBack }: Props) {
         </div>
       </div>
 
-      {/* 間取り画像 */}
-      {p.floorPlanUrl && (
-        <div className="px-5 pb-4">
-          <div className="rounded-lg border border-ink-muted/15 bg-bg-white p-2">
-            <img src={p.floorPlanUrl} alt="間取り" className="w-full object-contain" />
-          </div>
-        </div>
-      )}
-
       {/* タブ */}
       <div className="px-5 sticky top-12 bg-bg-card z-10">
         <div className="flex gap-2 border-b border-ink-muted/15">
@@ -220,7 +211,9 @@ function OverviewPanel({
 
       {p.floorPlanUrl && (
         <Section title="FLOOR PLAN">
-          <img src={p.floorPlanUrl} alt="間取り" className="w-full rounded-lg bg-bg-white border border-ink-muted/15" />
+          <div className="rounded-lg border border-ink-muted/15 bg-bg-white p-2">
+            <img src={p.floorPlanUrl} alt="間取り" className="w-full object-contain" />
+          </div>
         </Section>
       )}
 
