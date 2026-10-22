@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Proposal, PublicProposal } from '../../api/types';
 import { formatRent } from '../../lib/format';
 
@@ -16,6 +16,8 @@ export function CustomerAppDetail({ proposal, itemId, onBack }: Props) {
   const [imageIdx, setImageIdx] = useState(0);
   const [fav, setFav] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [hasSwiped, setHasSwiped] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   if (!item) {
     return (
@@ -38,6 +40,30 @@ export function CustomerAppDetail({ proposal, itemId, onBack }: Props) {
   const prevImage = () => setImageIdx((idx) => Math.max(0, idx - 1));
   const nextImage = () => setImageIdx((idx) => Math.min(images.length - 1, idx + 1));
 
+  // 横方向のスワイプだけを拾う。縦スクロールやタップは妨げない（preventDefault しない）
+  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const t = e.touches[0];
+    touchStartRef.current = t ? { x: t.clientX, y: t.clientY } : null;
+  };
+
+  const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (images.length <= 1 || !start) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
+    if (dx < 0 && imageIdx < images.length - 1) {
+      nextImage();
+      setHasSwiped(true);
+    } else if (dx > 0 && imageIdx > 0) {
+      prevImage();
+      setHasSwiped(true);
+    }
+  };
+
   return (
     <div className="min-h-full bg-bg-card flex flex-col">
       {/* トップバー */}
@@ -52,7 +78,11 @@ export function CustomerAppDetail({ proposal, itemId, onBack }: Props) {
       </div>
 
       {/* カルーセル */}
-      <div className="relative bg-bg-base aspect-[4/3] overflow-hidden">
+      <div
+        className="relative bg-bg-base aspect-[4/3] overflow-hidden touch-pan-y"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         {images.length > 0 ? (
           <img src={images[imageIdx]} alt="" className="w-full h-full object-cover" />
         ) : (
@@ -90,7 +120,7 @@ export function CustomerAppDetail({ proposal, itemId, onBack }: Props) {
                 />
               ))}
             </div>
-            {imageIdx === 0 && (
+            {imageIdx === 0 && !hasSwiped && (
               <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-bg-card/90 font-mono tracking-widest">
                 SWIPE →
               </div>
